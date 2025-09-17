@@ -9,6 +9,13 @@ license = { text = "MIT" }
 readme = "README.md"
 requires-python = "==3.12.*"
 
+[tool.uv]
+# Python version requirement
+python = ">=3.12"
+
+# Virtual environment configuration
+virtual-env = "/nas/ucb/ebronstein/venvs/skyrl-train"
+
 [tool.black]
 line-length = 120
 include = '\.pyi?$'
