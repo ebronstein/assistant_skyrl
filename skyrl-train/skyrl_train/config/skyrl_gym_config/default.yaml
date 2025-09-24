@@ -14,3 +14,9 @@ search:
   search_url: "http://127.0.0.1:8000/retrieve"
   topk: 3
   timeout: 30
+
+dialop_optimization:
+  model: "Qwen/Qwen2.5-1.5B-Instruct"
+  openai_client:
+    api_key: "EMPTY"
+    api_base: "http://localhost:8000/v1"

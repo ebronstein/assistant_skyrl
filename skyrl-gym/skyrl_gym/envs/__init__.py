@@ -36,3 +36,8 @@ register(
     id="searchcode",
     entry_point="skyrl_gym.envs.searchcode.env:SearchCodeEnv",
 )
+
+register(
+    id="dialop_optimization",
+    entry_point="skyrl_gym.envs.dialop_optimization.env:DialOpOptimizationEnv",
+)
