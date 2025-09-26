@@ -53,11 +53,11 @@ You can send messages to your partner, propose assignments, and accept or reject
 
 If you send a message or propose an assignment, it is your partner's turn (and vice versa). If you reject an assignment, it is still your turn. If you or your partner accept an assignment, the conversation is over.
 
-You have the following actions available: chat (send a message to your partner), propose_solution (propose an assignment of reviewers to papers), accept (accept a proposal from your partner), and reject (reject a proposal from your partner). The chat and propose_solution actions have content, while the other actions do not. Here is how to format each action:
-- chat: Hello, how are you?
-- propose solution: [propose_solution] BLEU: a Method for Automatic Evaluation of MT: Sofia Patel, Electra: Pre-training Text Encoders as Discriminators: Ethan Smith, ...
-- accept proposal: [accept]
-- reject proposal: [reject]
+You have the following actions available:
+- Send a message to your partner. This is for discussion purposes, not for formally proposing or rejecting assignments. No formatting is needed. Example: "Hello, how are you?"
+- Propose an assignment of reviewers to papers. Format: "[propose_solution] BLEU: a Method for Automatic Evaluation of MT: Sofia Patel, Electra: Pre-training Text Encoders as Discriminators: Ethan Smith, ..." The assignment must be a one-to-one matching between reviewers and papers.
+- Accept a proposal from your partner. Format: "[accept]"
+- Reject a proposal from your partner. Format: "[reject]"
 
 List of papers:
 {TASKS}

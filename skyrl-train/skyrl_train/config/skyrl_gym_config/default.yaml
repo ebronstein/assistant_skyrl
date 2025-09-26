@@ -16,7 +16,7 @@ search:
   timeout: 30
 
 dialop_optimization:
-  model: "microsoft/Phi-4-mini-instruct"
+  model: "Qwen/Qwen2.5-1.5B-Instruct"
   openai_client:
     api_key: "EMPTY"
     base_url: "http://localhost:8000/v1"

@@ -19,7 +19,7 @@ def make_prompt(
     system_prompt += (
         f"\nHere is your table of reviewer-paper similarity scores:\n{table}"
     )
-    prompt = [{"content": system_prompt, "role": "system"}]
+    prompt = [{"role": "system", "content": system_prompt}]
 
     if agent == "user":
         prompt.append(
