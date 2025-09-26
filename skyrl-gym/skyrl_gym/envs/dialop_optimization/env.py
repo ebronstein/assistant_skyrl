@@ -65,7 +65,7 @@ def is_action_allowed(
         if action_type == "chat" or action_type == "propose_solution":
             return None
         else:
-            return "The only allowed actions at this time are '[chat]' and '[propose_solution]'."
+            return "The only allowed actions at this time are 1) to send a message or 2) to propose a solution with '[propose_solution]'."
 
     if last_action_type == "propose_solution":
         if action_type == "accept" or action_type == "reject":
@@ -76,7 +76,7 @@ def is_action_allowed(
     if last_action_type == "accept":
         return "No actions are allowed after a solution has been accepted. The conversation is over."
 
-    return f"Invalid action type: {action_type}. Valid actions are: chat, propose_solution, accept, and reject."
+    return f"Invalid action type: {action_type}. Valid actions are: 1) to send a message or 2) to propose a solution with '[propose_solution]' or 3) to accept a solution with '[accept]' or 4) to reject a solution with '[reject]'."
 
 
 class DialOpOptimizationEnv(BaseTextEnv):
@@ -97,7 +97,10 @@ class DialOpOptimizationEnv(BaseTextEnv):
         self.output_parser = DialOpOptimizationOutputParser(
             len(extras["extra_info"]["table_values"])
         )
+        self.max_turns = extras.get("max_turns", 5)
+
         self.history: List[HistoryElement] = []
+        self.turns = 0
 
         # Initialize the table. Format the values as a 2D numpy array because Parquet
         # doesn't support nested arrays.
@@ -238,7 +241,7 @@ class DialOpOptimizationEnv(BaseTextEnv):
         if action_type in ["chat", "propose_solution"]:
             self._agent_selection = "assistant" if agent == "user" else "user"
 
-        done = action_type == "accept"
+        done = action_type == "accept" or self.turns >= self.max_turns
         reward = self._compute_reward() if done else 0.0
 
         return BaseTextEnvStepOutput(
