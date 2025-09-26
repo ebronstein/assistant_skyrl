@@ -47,3 +47,4 @@ Important Notes
 
 - Make sure your temp directory is not set or is set to ``/tmp``. For some reason, setting it to a location in your NAS directory will cause the same errors related to not finding standard C libraries.
 - This installation method was tested on a system with CUDA 12.2 and GLIBC 2.3.1, where the standard installation fails.
+- After installation, you may need to be careful when using `uv` because it may try to sync the environment with the `uv.lock`` file, which means it will uninstall flash-attn. In scripts that use `uv run --isolated`, use `uv run --active --no-sync` instead in order to use the active virtual environment and not sync it with the lock file. When using `uv pip install`, you can pass the `--dry-run` flag to make sure flash-attn would not be uninstalled.
