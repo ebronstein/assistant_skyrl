@@ -1,4 +1,4 @@
-from typing import Optional, get_args, Tuple
+from typing import Optional, get_args, Tuple, List
 import re
 import numpy as np
 from numpy.typing import NDArray
@@ -88,10 +88,14 @@ def parse_assignment(
             )
 
         # Match task
-        task_idx = match_task(task_str, TASKS, assignment)
+        task_idx, error_message = match_task(task_str, TASKS)
+        if error_message:
+            return None, error_message
 
         # Match worker
-        worker_idx = match_worker(worker_str, WORKERS, assignment)
+        worker_idx, error_message = match_worker(worker_str, WORKERS)
+        if error_message:
+            return None, error_message
 
         # Check for duplicates
         if task_idx in used_tasks:
@@ -111,8 +115,17 @@ def parse_assignment(
     return result, None
 
 
-def match_task(task_str, tasks, assignment):
-    """Match task string to tasks list using word overlap."""
+def match_task(task_str: str, tasks: List[str]) -> Tuple[Optional[int], Optional[str]]:
+    """Match task string to tasks list using word overlap.
+
+    Args:
+        task_str: The task string to match.
+        tasks: The list of tasks to match against.
+
+    Returns:
+        The index of the matched task and an error message. If matching is successful,
+        the error message is None. Otherwise, the index is None.
+    """
     task_words = set(word.lower() for word in task_str.split())
 
     best_matches = []
@@ -131,35 +144,65 @@ def match_task(task_str, tasks, assignment):
             best_matches.append(i)
 
     if max_overlap == 0:
-        raise ValueError(
-            f"No matching task found for '{task_str}' in assignment: '{assignment}'"
+        idx = None
+        error_message = f"No matching task found for '{task_str}'."
+    elif len(best_matches) > 1:
+        idx = None
+        error_message = (
+            f"'{task_str}' matches multiple tasks: {task_names}."
+            "Unclear which task to assign."
         )
+    else:
+        idx = best_matches[0]
+        error_message = None
 
-    if len(best_matches) > 1:
-        task_names = [tasks[i].split(":")[0] for i in best_matches]
-        raise ValueError(
-            f"Ambiguous task '{task_str}' matches multiple tasks equally: {task_names} in assignment: '{assignment}'"
-        )
-
-    return best_matches[0]
+    return idx, error_message
 
 
-def match_worker(worker_str, workers, assignment):
-    """Match worker string to workers list using exact name matching."""
-    worker_lower = worker_str.lower()
+def match_worker(
+    worker_str: str, workers: List[str]
+) -> Tuple[Optional[int], Optional[str]]:
+    """Match worker string to workers list using exact name matching.
 
+    Args:
+        worker_str: The worker string to match.
+        workers: The list of workers to match against.
+
+    Returns:
+        The index of the matched worker and an error message. If matching is successful,
+        the error message is None. Otherwise, the index is None.
+    """
+    worker_lower = worker_str.lower().strip()
+
+    matching_worker_idxs = []
     for i, worker in enumerate(workers):
         worker_parts = worker.split()
         first_name = worker_parts[0].lower()
         last_name = worker_parts[1].lower() if len(worker_parts) > 1 else ""
         full_name = worker.lower()
 
-        if worker_lower in [first_name, last_name, full_name]:
-            return i
+        if (
+            worker_lower in [first_name, last_name, full_name]
+            or first_name in worker_lower
+            or last_name in worker_lower
+            or full_name in worker_lower
+        ):
+            matching_worker_idxs.append(i)
 
-    raise ValueError(
-        f"No matching worker found for '{worker_str}' in assignment: '{assignment}'"
-    )
+    if not matching_worker_idxs:
+        idx = None
+        error_message = f"No reviewers match '{worker_str}'."
+    elif len(matching_worker_idxs) > 1:
+        idx = None
+        error_message = (
+            f"Multiple reviewers found matching '{worker_str}'. "
+            "Unclear which reviewer to assign."
+        )
+    else:
+        idx = matching_worker_idxs[0]
+        error_message = None
+
+    return idx, error_message
 
 
 class DialOpOptimizationOutputParser:
