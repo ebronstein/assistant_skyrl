@@ -3,11 +3,8 @@ import re
 import numpy as np
 from numpy.typing import NDArray
 
+from .dataset import DialOpOptimizationSolution
 from .types import DialOpOptimizationActionType
-
-# List of reviewer-paper assignments. The value of the i-th element is the paper index
-# for the i-th reviewer.
-DialOpOptimizationSolution = NDArray[np.int8]
 
 
 TASKS = [
@@ -111,7 +108,7 @@ def parse_assignment(
         # Assign paper to reviewer: result[reviewer_idx] = paper_idx
         result[worker_idx] = task_idx
 
-    return result
+    return result, None
 
 
 def match_task(task_str, tasks, assignment):
@@ -220,7 +217,11 @@ class DialOpOptimizationOutputParser:
             return action_type, assignment, error_message
         elif action_type == "accept" or action_type == "reject":
             if content.strip():
-                return None, None, f"{action_type} actions should not have content"
+                return (
+                    None,
+                    None,
+                    f"{action_type} actions should not have content. Simply return '[{action_type}]'.",
+                )
             return action_type, None, None
         else:
             return (

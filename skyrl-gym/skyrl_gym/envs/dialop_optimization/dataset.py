@@ -8,32 +8,15 @@ import io
 from typing import List, Optional, Tuple, TypedDict, Union
 
 import numpy as np
+from numpy.typing import NDArray
 import scipy.optimize
 
 from datasets import Dataset
 
+# List of reviewer-paper assignments. The value of the i-th element is the paper index
+# for the i-th reviewer.
+DialOpOptimizationSolution = NDArray[np.int8]
 
-SYSTEM_PROMPT = """
-You and your partner are area chairs for a conference, and you have to assign reviewers to papers. Each of you has some information about which reviewers would be good for which papers, but you'll have to communicate in order to make the best assignments.
-
-You will see a table of reviewer-paper similarity scores. The higher the score, the better the fit. Your partner has their own table, which may be different from yours. Your goal is to propose a one-to-one matching between reviewers and papers with the highest sum of scores. Note that the scores only show relative fit (e.g., reviewer1 is a better fit than reviewer2), so you cannot and should not compare your scores with your partner's.
-
-You can send messages to your partner, propose assignments, and accept or reject your partner's proposals. Only certain actions are available at certain times:
-- At the start of the conversation, you can send a message, or propose an assignment.
-- If your partner sent a message, you can send a message or propose an assignment.
-- If your partner proposed an assignment, you can only accept or reject it.
-
-If you send a message or propose an assignment, it is your partner's turn (and vice versa). If you reject an assignment, it is still your turn. If you or your partner accept an assignment, the conversation is over.
-
-You have the following actions available: chat (send a message to your partner), propose_solution (propose an assignment of reviewers to papers), accept (accept a proposal from your partner), and reject (reject a proposal from your partner). The chat and propose_solution actions have content, while the other actions do not. Here is how to format each action:
-- chat: Hello, how are you?
-- propose solution: [propose_solution] reviewer1: paper1, reviewer2: paper2, ...
-- accept proposal: [accept]
-- reject proposal: [reject]
-"""
-
-# Maximum number of tables to sample before returning a task
-MAX_TABLES = 1000
 
 TASKS = [
     "BLEU: a Method for Automatic Evaluation of MT",
@@ -58,6 +41,35 @@ WORKERS = [
     "Ethan Smith",
     "Noah Wilson",
 ]
+
+SYSTEM_PROMPT = """You and your partner are area chairs for a conference, and you have to assign reviewers to papers. Each of you has some information about which reviewers would be good for which papers, but you'll have to communicate in order to make the best assignments.
+
+You will see a table of reviewer-paper similarity scores. The higher the score, the better the fit. Your partner has their own table, which may be different from yours. Your goal is to propose a one-to-one matching between reviewers and papers with the highest sum of scores. Note that the scores only show relative fit (e.g., reviewer1 is a better fit than reviewer2), so you cannot and should not compare your scores with your partner's.
+
+You can send messages to your partner, propose assignments, and accept or reject your partner's proposals. Only certain actions are available at certain times:
+- At the start of the conversation, you can send a message, or propose an assignment.
+- If your partner sent a message, you can send a message or propose an assignment.
+- If your partner proposed an assignment, you can only accept or reject it.
+
+If you send a message or propose an assignment, it is your partner's turn (and vice versa). If you reject an assignment, it is still your turn. If you or your partner accept an assignment, the conversation is over.
+
+You have the following actions available: chat (send a message to your partner), propose_solution (propose an assignment of reviewers to papers), accept (accept a proposal from your partner), and reject (reject a proposal from your partner). The chat and propose_solution actions have content, while the other actions do not. Here is how to format each action:
+- chat: Hello, how are you?
+- propose solution: [propose_solution] BLEU: a Method for Automatic Evaluation of MT: Sofia Patel, Electra: Pre-training Text Encoders as Discriminators: Ethan Smith, ...
+- accept proposal: [accept]
+- reject proposal: [reject]
+
+List of papers:
+{TASKS}
+
+List of reviewers:
+{WORKERS}
+""".format(
+    TASKS=TASKS, WORKERS=WORKERS
+)
+
+# Maximum number of tables to sample before returning a task
+MAX_TABLES = 1000
 
 
 class Table:
@@ -123,7 +135,7 @@ class Table:
 
     def find_max_value_known_assignment(
         self, knowns: List[np.ndarray]
-    ) -> Tuple[List[Tuple[int, int]], float]:
+    ) -> Tuple[DialOpOptimizationSolution, float]:
         """Find the max value assignment given a set of views.
 
         If the players pool their knowledge, what is the best they can do?
@@ -132,15 +144,18 @@ class Table:
             knowns: list of player view mask arrays
 
         Returns:
-            assignment: list of tuples (reviewer idx, paper idx) representing the best assignment
+            assignment: DialOpOptimizationSolution representing the best assignment.
+              assignment[i] = j means reviewer i is assigned paper j
             score: score of the best assignment
         """
         known = np.logical_or(*knowns)
         pooled_expected_table = -self.values * known - self.max_val / 2 * (1 - known)
         rows, cols = scipy.optimize.linear_sum_assignment(pooled_expected_table)
-        assignment = list(zip(rows, cols))
-        score = self.score(assignment)
-        return assignment, score
+        assert np.array_equal(
+            rows, np.arange(self.num_rows)
+        ), f"Rows expected to be sorted. Got: {rows}"
+        score = self.score(cols)
+        return cols, score
 
     def get_random_view(self, p_cell_observed: float) -> Tuple["Table", np.ndarray]:
         """Return a new Table instance representing a view of this table.
@@ -160,11 +175,12 @@ class Table:
         output_table = Table(values=output_values)
         return output_table, 1 - unknown
 
-    def score(self, assignment: List[Tuple[int, int]]) -> float:
+    def score(self, assignment: DialOpOptimizationSolution) -> float:
         """Calculate the score of an assignment.
 
         Args:
-            assignment: list of tuples (reviewer idx, paper idx)
+            assignment: DialOpOptimizationSolution representing the assignment.
+              assignment[i] = j means reviewer i is assigned paper j
 
         Returns:
             total score of the assignment
@@ -172,15 +188,17 @@ class Table:
         Raises:
             AssertionError: if assignment length doesn't match number of rows
         """
-        assert len(assignment) == self.num_rows, f"{len(assignment)} != {self.num_rows}"
-        return float(sum([self.values[r][c] for r, c in assignment]))
+        assert assignment.shape == (
+            self.num_rows,
+        ), f"{assignment.shape} != ({self.num_rows},)"
+        return float(sum([self.values[r][c] for r, c in enumerate(assignment)]))
 
 
 class DialOpOptimizationTask(TypedDict):
     """DialOp optimization task."""
 
     table_values: np.ndarray
-    solution: List[Tuple[int, int]]
+    solution: DialOpOptimizationSolution
     max_reward: float
     user_table: str
     assistant_table: str

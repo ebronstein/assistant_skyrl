@@ -11,7 +11,7 @@ def make_prompt(
     system_prompt: str,
     user_table: str,
     assistant_table: str,
-) -> str:
+) -> ConversationType:
     """Make a prompt for the given agent and history."""
     assert agent in ["user", "assistant"], f"Invalid agent: {agent}"
 
@@ -25,7 +25,7 @@ def make_prompt(
         prompt.append(
             {
                 "role": "user",
-                "content": "Hello, let’s assign these papers to the reviewers.",
+                "content": "Hello, let's assign these papers to the reviewers.",
             }
         )
 

@@ -2,7 +2,7 @@ from typing import Literal, TypedDict, Optional
 
 AgentType = Literal["user", "assistant"]
 
-DialOpOptimizationActionType = Literal["chat", "propose_solution", "accept", "reject"]
+DialOpOptimizationActionType = Literal["chat", "propose_solution", "accept", "reject", "error"]
 
 
 class HistoryElement(TypedDict):
