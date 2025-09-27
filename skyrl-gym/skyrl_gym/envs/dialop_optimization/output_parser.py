@@ -70,10 +70,6 @@ def parse_assignment(
     used_workers = set()
 
     for assignment in assignments:
-        # Check if assignment contains colon
-        if ":" not in assignment:
-            return None, f"Misformatted assignment (missing colon): '{assignment}'"
-
         # Split by colon - split on last colon to handle task names with colons
         colon_idx = assignment.rfind(":")
         if colon_idx == -1:
@@ -263,7 +259,7 @@ class DialOpOptimizationOutputParser:
                 return (
                     None,
                     None,
-                    f"{action_type} actions should not have content. Simply return '[{action_type}]'.",
+                    f"{action_type} action should not have content. Simply return '[{action_type}]'.",
                 )
             return action_type, None, None
         else:
