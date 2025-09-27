@@ -1,7 +1,7 @@
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List, Tuple, get_args
 
 import numpy as np
-from openai import OpenAI
+import openai
 
 from skyrl_gym.envs.base_text_env import (
     BaseTextEnv,
@@ -59,6 +59,9 @@ def is_action_allowed(
     Returns:
         An error message if the action is not allowed, None otherwise.
     """
+    if action_type not in get_args(DialOpOptimizationActionType):
+        return f"Invalid action type: {action_type}. Valid actions are: 1) to send a message or 2) to propose a solution with '[propose_solution]' or 3) to accept a solution with '[accept]' or 4) to reject a solution with '[reject]'."
+
     last_action_type = get_last_valid_action_type(history)
 
     if last_action_type in [None, "chat", "reject"]:
@@ -76,7 +79,26 @@ def is_action_allowed(
     if last_action_type == "accept":
         return "No actions are allowed after a solution has been accepted. The conversation is over."
 
-    return f"Invalid action type: {action_type}. Valid actions are: 1) to send a message or 2) to propose a solution with '[propose_solution]' or 3) to accept a solution with '[accept]' or 4) to reject a solution with '[reject]'."
+
+def compute_reward(
+    history: List[HistoryElement], table: Table, max_reward: float
+) -> float:
+    """Compute the reward for the last solution proposed by the assistant."""
+    # If no assignment was accepted, the reward is 0.
+    if get_last_valid_action_type(history) != "accept":
+        return 0.0
+
+    last_solution = None
+    for elem in reversed(history):
+        if elem["action_type"] == "propose_solution":
+            last_solution = elem["action_content"]
+            break
+
+    assert (
+        last_solution is not None
+    ), "The history contains an accept action, but no solution was proposed."
+
+    return table.score(last_solution) / max_reward
 
 
 class DialOpOptimizationEnv(BaseTextEnv):
@@ -112,8 +134,8 @@ class DialOpOptimizationEnv(BaseTextEnv):
         # Which agent's turn it is to act
         self._agent_selection: AgentType = "user"
 
-        self.user_client = OpenAI(**env_config["openai_client"])
-        self.model = env_config["model"]
+        self.user_client = openai.OpenAI(**env_config["openai_client"])
+        self.user_model = env_config["user_model"]
 
     def init(self, prompt: ConversationType) -> Tuple[ConversationType, Dict[str, Any]]:
         """
@@ -139,6 +161,7 @@ class DialOpOptimizationEnv(BaseTextEnv):
 
     def step(self, action: str) -> BaseTextEnvStepOutput:
         assert self._agent_selection == "assistant"
+
         assistant_step_output = self._step_agent(self._agent_selection, action)
 
         if self._agent_selection == "assistant":
@@ -154,27 +177,46 @@ class DialOpOptimizationEnv(BaseTextEnv):
         )
 
     def _generate_user_actions(
-        self, max_actions: int = 5
+        self, max_actions: int = 3
     ) -> List[BaseTextEnvStepOutput]:
         """Generate user actions."""
         observations = []
         while self._agent_selection == "user" and len(observations) < max_actions:
-            user_response = self.user_client.responses.create(
-                model=self.model,
-                input=make_prompt(
-                    self._agent_selection,
-                    self.history,
-                    self.system_prompt,
-                    self.user_table,
-                    self.assistant_table,
-                ),
-            )
+            try:
+                user_response = self.user_client.responses.create(
+                    model=self.user_model,
+                    input=make_prompt(
+                        self._agent_selection,
+                        self.history,
+                        self.system_prompt,
+                        self.user_table,
+                        self.assistant_table,
+                    ),
+                )
+            except openai.BadRequestError as e:
+                # If input prompt is too long for the user model, end the episode.
+                # The OpenAI API returns a BadRequestError with a message like:
+                # "This model's maximum context length is 16384 tokens.
+                # However, your request has 20035 input tokens.
+                # Please reduce the length of the input messages.
+                if "maximum context length" in e.body["message"]:
+                    observations.append(
+                        BaseTextEnvStepOutput(observations=[], reward=0.0, done=True)
+                    )
+                    break
+                else:
+                    raise e
+
             user_action = user_response.output[0].content[0].text
 
             user_step_output = self._step_agent(self._agent_selection, user_action)
             observations.append(user_step_output)
             if user_step_output["done"]:
                 break
+
+        # It is now the assistant's turn. This line is only needed if the user reached
+        # the maximum number of actions. Otherwise, `self._step_agent` will update it.
+        self._agent_selection = "assistant"
 
         return observations
 
@@ -250,13 +292,4 @@ class DialOpOptimizationEnv(BaseTextEnv):
 
     def _compute_reward(self) -> float:
         """Compute the reward for the last solution proposed by the assistant."""
-        last_solution = None
-        for elem in reversed(self.history):
-            if elem["action_type"] == "propose_solution":
-                last_solution = elem["action_content"]
-                break
-
-        if last_solution is None:
-            return 0.0
-
-        return self.table.score(last_solution) / self.max_reward
+        return compute_reward(self.history, self.table, self.max_reward)
